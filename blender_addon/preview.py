@@ -16,7 +16,9 @@ def clear_preview() -> None:
             bpy.data.curves.remove(curve, do_unlink=True)
 
 
-def build_preview(context: bpy.types.Context, print_ir: ir.PrintIR) -> bpy.types.Object:
+def build_preview(
+    context: bpy.types.Context, print_ir: ir.PrintIR, mm_to_bu: float
+) -> bpy.types.Object:
     clear_preview()
     curve = bpy.data.curves.new(PREVIEW_DATA_NAME, type="CURVE")
     curve.dimensions = "3D"
@@ -35,7 +37,12 @@ def build_preview(context: bpy.types.Context, print_ir: ir.PrintIR) -> bpy.types
         pts = [Vector(layer.perimeter[i].p0) for i in range(n)]
         spline.points.add(n - 1)
         for i, co in enumerate(pts):
-            spline.points[i].co = (co.x, co.y, co.z, 1.0)
+            spline.points[i].co = (
+                co.x * mm_to_bu,
+                co.y * mm_to_bu,
+                co.z * mm_to_bu,
+                1.0,
+            )
         spline.use_cyclic_u = True
 
     return obj

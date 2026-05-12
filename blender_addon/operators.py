@@ -20,15 +20,17 @@ class SLICER_OT_generate_path(Operator):
             return {"CANCELLED"}
         s = context.scene
         try:
+            bu_to_mm = slice.scene_bu_to_mm(s)
             print_ir = slice.mesh_to_print_ir(
                 obj,
                 context.evaluated_depsgraph_get(),
+                s,
                 s.slicer_layer_height,
                 s.slicer_first_layer_height,
                 s.slicer_feedrate,
                 filament_mode=s.slicer_filament_mode,
             )
-            preview.build_preview(context, print_ir)
+            preview.build_preview(context, print_ir, 1.0 / bu_to_mm)
         except Exception as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
@@ -113,6 +115,7 @@ class SLICER_PT_panel(Panel):
         layout.prop(s, "slicer_line_width")
         layout.prop(s, "slicer_filament_diameter")
         layout.prop(s, "slicer_feedrate")
+        layout.prop(s, "slicer_mm_per_scene_meter")
         layout.prop(s, "slicer_filament_mode")
         layout.operator("slicer.generate_path")
         layout.operator("slicer.export_gcode")
@@ -151,6 +154,17 @@ def register():
     Scene.slicer_feedrate = FloatProperty(
         name="Feedrate", default=3600.0, min=60.0, max=30000.0
     )
+    Scene.slicer_mm_per_scene_meter = FloatProperty(
+        name="mm per scene meter",
+        description=(
+            "World length: first convert Blender units to meters (× scene unit scale), "
+            "then × this → G-code mm. 10 ≈ same number as meters but printed as centimeters; "
+            "1000 = full metric (1 scene m → 1000 mm on bed)"
+        ),
+        default=10.0,
+        min=0.001,
+        max=1_000_000.0,
+    )
     Scene.slicer_filament_mode = EnumProperty(
         name="Filament mode",
         items=(
@@ -163,11 +177,21 @@ def register():
 
 def unregister():
     for c in reversed(_cls):
-        bpy.utils.unregister_class(c)
-    del Scene.slicer_template_path
-    del Scene.slicer_layer_height
-    del Scene.slicer_first_layer_height
-    del Scene.slicer_line_width
-    del Scene.slicer_filament_diameter
-    del Scene.slicer_feedrate
-    del Scene.slicer_filament_mode
+        try:
+            bpy.utils.unregister_class(c)
+        except RuntimeError:
+            pass
+    for attr in (
+        "slicer_template_path",
+        "slicer_layer_height",
+        "slicer_first_layer_height",
+        "slicer_line_width",
+        "slicer_filament_diameter",
+        "slicer_feedrate",
+        "slicer_mm_per_scene_meter",
+        "slicer_filament_mode",
+    ):
+        try:
+            delattr(Scene, attr)
+        except Exception:
+            pass

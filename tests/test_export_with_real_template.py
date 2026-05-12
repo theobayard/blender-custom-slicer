@@ -79,12 +79,13 @@ def _expected_total_lines(
 ) -> int:
     h = len(parsed.header.splitlines())
     f = len(parsed.footer.splitlines())
+    composer_prefix = 2
     s01 = len(parsed.swap_0_to_1.splitlines())
     s10 = len(parsed.swap_1_to_0.splitlines())
     motion = _expected_motion_line_count(num_layers, segs_per_layer)
     swap_lines = t01 * s01 + t10 * s10
     z_lines = (t01 + t10) * 1
-    return h + f + motion + swap_lines + z_lines
+    return h + f + composer_prefix + motion + swap_lines + z_lines
 
 
 def test_real_cube_template_parse_structure(cube_parsed):

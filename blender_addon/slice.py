@@ -20,6 +20,12 @@ def clear_last_ir() -> None:
     _last_ir = None
 
 
+def scene_bu_to_mm(scene: bpy.types.Scene) -> float:
+    return float(scene.unit_settings.scale_length) * float(
+        scene.slicer_mm_per_scene_meter
+    )
+
+
 def _filament_fn(mode: str) -> Callable[[int], int]:
     if mode == "ALTERNATE_01":
 
@@ -230,6 +236,7 @@ def _layer_plane_heights(
 def mesh_to_print_ir(
     obj: bpy.types.Object,
     depsgraph: bpy.types.Depsgraph,
+    scene: bpy.types.Scene,
     layer_height: float,
     first_layer_height: float,
     feedrate: float,
@@ -241,7 +248,9 @@ def mesh_to_print_ir(
     if layer_height <= 0 or first_layer_height <= 0:
         raise ValueError("layer heights must be positive")
 
+    bu_to_mm = scene_bu_to_mm(scene)
     verts, polys = _mesh_world_geometry(obj, depsgraph)
+    verts = [Vector((v.x * bu_to_mm, v.y * bu_to_mm, v.z * bu_to_mm)) for v in verts]
     zs = [v.z for v in verts]
     z_min, z_max = min(zs), max(zs)
     layers_z = _layer_plane_heights(z_min, z_max, first_layer_height, layer_height, z_tol)

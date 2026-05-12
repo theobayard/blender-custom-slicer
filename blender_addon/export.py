@@ -43,7 +43,10 @@ def export_print_ir_to_gcode_string(
     settings = settings or ExportSettings()
     ir.validate_print_ir(print_ir)
 
-    parts: list[str] = [parsed.header]
+    parts: list[str] = [
+        parsed.header,
+        "M82 ; absolute E for composed motion\nG92 E0\n",
+    ]
     prev_f = 0
     e_accum = 0.0
     first_move = True

@@ -39,6 +39,8 @@ def test_filament_transition_inserts_swap_and_z():
         default_feedrate=3000.0,
     )
     assert "; H" in g
+    assert g.index("M82 ; absolute E for composed motion") < g.index("; LAYER_CHANGE")
+    assert "G92 E0" in g
     assert "SWAP_0_TO_1" in g
     assert "SWAP_1_TO_0" not in g
     assert "G1 Z0.40000" in g
