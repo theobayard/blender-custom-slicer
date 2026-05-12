@@ -5,6 +5,7 @@ from bpy_extras.io_utils import ExportHelper
 
 from . import export, preview, slice
 from .template_parse import TemplateParseError, parse_bambu_template
+from .version import ADDON_VERSION_STRING
 
 
 class SLICER_OT_generate_path(Operator):
@@ -97,7 +98,7 @@ class SLICER_OT_clear_preview(Operator):
 
 
 class SLICER_PT_panel(Panel):
-    bl_label = "Slicer"
+    bl_label = f"Slicer (v{ADDON_VERSION_STRING})"
     bl_idname = "SLICER_PT_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"

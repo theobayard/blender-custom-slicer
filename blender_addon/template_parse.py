@@ -5,6 +5,10 @@ from dataclasses import dataclass
 START = "; CP TOOLCHANGE START"
 END = "; CP TOOLCHANGE END"
 CUSTOM_START = "; ---CUSTOM_MOTION_START---"
+EXECUTABLE_START = "; EXECUTABLE_BLOCK_START"
+WIPE_TOWER_START = "; WIPE_TOWER_START"
+MACHINE_END_START = "; MACHINE_END_GCODE_START"
+EXECUTABLE_END = "; EXECUTABLE_BLOCK_END"
 
 
 @dataclass(frozen=True)
@@ -19,15 +23,60 @@ class TemplateParseError(ValueError):
     pass
 
 
+def _indices_of_cp_toolchange_start(lines: list[str]) -> list[int]:
+    return [i for i, ln in enumerate(lines) if ln.strip() == START]
+
+
+def _auto_header_end_before_first_wipe_tower(
+    lines: list[str], first_cp_idx: int
+) -> int | None:
+    exec_idx = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == EXECUTABLE_START:
+            exec_idx = i
+            break
+    if exec_idx is None:
+        return None
+    for i in range(exec_idx + 1, first_cp_idx):
+        if lines[i].strip() == WIPE_TOWER_START:
+            return i
+    return None
+
+
+def _trim_footer_to_machine_shutdown(footer_lines: list[str]) -> list[str]:
+    try:
+        mi = next(
+            i for i, ln in enumerate(footer_lines) if ln.strip() == MACHINE_END_START
+        )
+    except StopIteration:
+        return footer_lines
+    try:
+        ei = next(
+            i
+            for i, ln in enumerate(footer_lines[mi:], start=mi)
+            if ln.strip() == EXECUTABLE_END
+        )
+    except StopIteration:
+        return footer_lines[mi:]
+    return footer_lines[mi : ei + 1]
+
+
 def _strip_trailing_blank(lines: list[str]) -> list[str]:
     while lines and lines[-1].strip() == "":
         lines.pop()
     return lines
 
 
-def parse_bambu_template(text: str) -> ParsedTemplate:
+def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTemplate:
     raw_lines = text.splitlines()
     lines = [ln.rstrip("\r") for ln in raw_lines]
+
+    start_indices = _indices_of_cp_toolchange_start(lines)
+    if len(start_indices) < 2:
+        raise TemplateParseError(
+            "need at least two '; CP TOOLCHANGE START' blocks (capture A,B,A style export)"
+        )
+    first_cp_idx = start_indices[0]
 
     custom_idx = None
     for i, ln in enumerate(lines):
@@ -37,16 +86,14 @@ def parse_bambu_template(text: str) -> ParsedTemplate:
 
     if custom_idx is not None:
         header_lines = lines[:custom_idx]
+    elif header_trim == "legacy":
+        header_lines = lines[:first_cp_idx]
     else:
-        start_indices: list[int] = []
-        for i, ln in enumerate(lines):
-            if ln.strip() == START:
-                start_indices.append(i)
-        if len(start_indices) < 2:
-            raise TemplateParseError(
-                "need at least two '; CP TOOLCHANGE START' blocks (capture A,B,A style export)"
-            )
-        header_lines = lines[: start_indices[0]]
+        auto_end = _auto_header_end_before_first_wipe_tower(lines, first_cp_idx)
+        if auto_end is not None:
+            header_lines = lines[:auto_end]
+        else:
+            header_lines = lines[:first_cp_idx]
 
     block_ranges: list[tuple[int, int]] = []
     i = 0
@@ -72,7 +119,7 @@ def parse_bambu_template(text: str) -> ParsedTemplate:
     swap_01_lines = lines[first_s : first_e + 1]
     swap_10_lines = lines[second_s : second_e + 1]
 
-    footer_lines = lines[second_e + 1 :]
+    footer_lines = _trim_footer_to_machine_shutdown(lines[second_e + 1 :])
 
     header = "\n".join(_strip_trailing_blank(list(header_lines))) + "\n"
     swap_0_to_1 = "\n".join(swap_01_lines) + "\n"

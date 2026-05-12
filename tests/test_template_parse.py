@@ -1,6 +1,31 @@
+from pathlib import Path
+
 import pytest
 
 from blender_addon.template_parse import TemplateParseError, parse_bambu_template
+
+
+def test_cube_asset_auto_header_trim_line_count():
+    root = Path(__file__).resolve().parents[1]
+    pth = root / "blender_addon" / "assets" / "2_color_change_cube.ipynb.gcode"
+    if not pth.is_file():
+        pytest.skip("cube asset not present")
+    text = pth.read_text(encoding="utf-8", errors="replace")
+    p = parse_bambu_template(text)
+    assert len(p.header.splitlines()) == 1221
+    p_legacy = parse_bambu_template(text, header_trim="legacy")
+    assert len(p_legacy.header.splitlines()) > 100000
+
+
+def test_placeholder_asset_parses():
+    root = Path(__file__).resolve().parents[1]
+    p = root / "blender_addon" / "assets" / "minimal_bambu_template_placeholder.gcode"
+    text = p.read_text(encoding="utf-8")
+    r = parse_bambu_template(text)
+    assert "G21" in r.header
+    assert "CP TOOLCHANGE START" in r.swap_0_to_1
+    assert "CP TOOLCHANGE START" in r.swap_1_to_0
+    assert "FOOTER" in r.footer or "footer" in r.footer.lower()
 
 
 def test_parse_two_toolchanges():
