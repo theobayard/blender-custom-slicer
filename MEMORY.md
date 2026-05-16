@@ -93,6 +93,10 @@ One `.gcode` file from **Bambu Studio** for **X1C + AMS** that contains:
 
 ## Dev
 
+- **Bambu / G-code reference (local, for development):** [docs/gcode-reference/](docs/gcode-reference/) — not official Bambu specs; vendored notes for this repo.
+  - [docs/gcode-reference/openbambuapi-gcode.md](docs/gcode-reference/openbambuapi-gcode.md) — from [OpenBambuAPI `gcode.md`](https://github.com/Doridian/OpenBambuAPI/blob/main/gcode.md): header block guards, AMS load/unload macro examples, and reverse‑engineered Bambu extensions (e.g. `M620`/`M621`, `M1002`, `G380`, non‑Marlin `G29` usage).
+  - [docs/gcode-reference/community-gcode-docs.md](docs/gcode-reference/community-gcode-docs.md) — [rjduran/bambu-gcode-reference](https://github.com/rjduran/bambu-gcode-reference)–style table: header comment conventions, Marlin G/M codes Bambu Studio emits, and Bambu‑specific G/M sections (WIP community doc).
+  - For **Bambu Studio placeholders** in custom G-code (`{layer_z}`, `{if}…{endif}`, etc.), the authoritative source remains the wiki: https://wiki.bambulab.com/en/software/bambu-studio/placeholder-list (not mirrored here unless added later).
 - **Scene units → G-code mm:** world positions are `(BU × scene.unit_settings.scale_length) × slicer_mm_per_scene_meter`. **scale_length** turns BU into scene meters; **mm per scene meter** (panel default **10**) maps those meters to printer mm — **10** means one scene-meter prints as **10 mm** (same numerals as if that distance were **centimeters** on the bed). Use **1000** for true scale (1 scene m → 1000 mm). Composed motion is prefixed with **`M82`** and **`G92 E0`** after the template header because Bambu’s start block uses **`M83`** (relative E) while the exporter emits **absolute cumulative E**.
 - Install: **Edit → Preferences → Add-ons → Install…** select the `blender_addon` folder (or zip the folder).
 - Tests: `pytest` from repo root (no Blender required for parser/export tests).

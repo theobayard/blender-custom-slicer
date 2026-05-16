@@ -1,4 +1,4 @@
----
+     ---
 name: blender-addon-hard-reload
 description: Hard reload a Blender add-on after Python edits by disabling it, removing its modules from sys.modules, invalidating import caches, re-enabling it, and verifying the loaded version/path. Use when Blender appears to keep stale code after addon reload.
 ---
