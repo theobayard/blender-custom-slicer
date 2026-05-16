@@ -32,10 +32,10 @@ def test_cube_asset_without_prime_tower_parses_x1_swaps():
     assert "; filament start gcode" in p.swap_1_to_0
     assert "; CHANGE_LAYER" not in p.header
     assert "; OBJECT_ID:" not in p.header
-    assert p.swap_0_to_1_source_z == pytest.approx(8.4)
-    assert p.swap_1_to_0_source_z == pytest.approx(11.0)
-    assert "G1 Z11.4 F1200" in p.swap_0_to_1
-    assert "G1 Z14 F1200" in p.swap_1_to_0
+    assert p.swap_0_to_1_source_z == pytest.approx(8.6)
+    assert p.swap_1_to_0_source_z == pytest.approx(11.12)
+    assert "G1 Z11.6 F1200" in p.swap_0_to_1
+    assert "G1 Z14.12 F1200" in p.swap_1_to_0
 
 
 def test_placeholder_asset_parses():
