@@ -17,6 +17,27 @@ def test_cube_asset_auto_header_trim_line_count():
     assert len(p_legacy.header.splitlines()) > 100000
 
 
+def test_cube_asset_without_prime_tower_parses_x1_swaps():
+    root = Path(__file__).resolve().parents[1]
+    pth = root / "blender_addon" / "assets" / "2_color_change_cube.gcode"
+    if not pth.is_file():
+        pytest.skip("cube asset not present")
+    text = pth.read_text(encoding="utf-8", errors="replace")
+    p = parse_bambu_template(text)
+    assert ";=X1" in p.swap_0_to_1
+    assert ";=X1" in p.swap_1_to_0
+    assert "M73 E1" in p.swap_0_to_1
+    assert "M73 E0" in p.swap_1_to_0
+    assert "; filament start gcode" in p.swap_0_to_1
+    assert "; filament start gcode" in p.swap_1_to_0
+    assert "; CHANGE_LAYER" not in p.header
+    assert "; OBJECT_ID:" not in p.header
+    assert p.swap_0_to_1_source_z == pytest.approx(8.4)
+    assert p.swap_1_to_0_source_z == pytest.approx(11.0)
+    assert "G1 Z11.4 F1200" in p.swap_0_to_1
+    assert "G1 Z14 F1200" in p.swap_1_to_0
+
+
 def test_placeholder_asset_parses():
     root = Path(__file__).resolve().parents[1]
     p = root / "blender_addon" / "assets" / "minimal_bambu_template_placeholder.gcode"
@@ -73,3 +94,74 @@ X
 """
     with pytest.raises(TemplateParseError):
         parse_bambu_template(text)
+
+
+def test_parse_x1_swap_blocks_without_cp_markers():
+    text = """; EXECUTABLE_BLOCK_START
+; CHANGE_LAYER
+;=X1 20251031=
+M620 S1A
+M73 E1
+M621 S1A
+; filament start gcode
+M106 P3 S150
+
+; OBJECT_ID: 7
+G1 X10 Y10
+;=X1 20251031=
+M620 S0A
+M73 E0
+M621 S0A
+; filament start gcode
+M106 P3 S150
+
+; OBJECT_ID: 8
+G1 X20 Y20
+; MACHINE_END_GCODE_START
+M400
+; EXECUTABLE_BLOCK_END
+"""
+    p = parse_bambu_template(text)
+    assert "M73 E1" in p.swap_0_to_1
+    assert "M73 E0" in p.swap_1_to_0
+    assert "; CHANGE_LAYER" not in p.header
+    assert p.swap_0_to_1_source_z is None
+    assert p.swap_1_to_0_source_z is None
+
+
+def test_parse_x1_swap_extracts_source_z_from_z_height_comment():
+    text = """; EXECUTABLE_BLOCK_START
+; CHANGE_LAYER
+; Z_HEIGHT: 4.20
+; LAYER_HEIGHT: 0.2
+;=X1
+G1 Z7.2 F1200
+G1 X10 Y10
+M620 S1A
+G1 Z7.2 F3000
+M621 S1A
+; filament start gcode
+M106 P3 S150
+
+; OBJECT_ID: 7
+G1 X10 Y10
+; CHANGE_LAYER
+; Z_HEIGHT: 8.40
+; LAYER_HEIGHT: 0.2
+;=X1
+G1 Z11.4 F1200
+M620 S0A
+G1 Z11.4 F3000
+M621 S0A
+; filament start gcode
+M106 P3 S150
+
+; OBJECT_ID: 8
+G1 X20 Y20
+; MACHINE_END_GCODE_START
+M400
+; EXECUTABLE_BLOCK_END
+"""
+    p = parse_bambu_template(text)
+    assert p.swap_0_to_1_source_z == pytest.approx(4.2)
+    assert p.swap_1_to_0_source_z == pytest.approx(8.4)

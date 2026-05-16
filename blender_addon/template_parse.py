@@ -7,8 +7,12 @@ END = "; CP TOOLCHANGE END"
 CUSTOM_START = "; ---CUSTOM_MOTION_START---"
 EXECUTABLE_START = "; EXECUTABLE_BLOCK_START"
 WIPE_TOWER_START = "; WIPE_TOWER_START"
+CHANGE_LAYER_START = "; CHANGE_LAYER"
 MACHINE_END_START = "; MACHINE_END_GCODE_START"
 EXECUTABLE_END = "; EXECUTABLE_BLOCK_END"
+X1_SWAP_START_PREFIX = ";=X1"
+FILAMENT_START = "; filament start gcode"
+Z_HEIGHT_PREFIX = "; Z_HEIGHT:"
 
 
 @dataclass(frozen=True)
@@ -17,18 +21,77 @@ class ParsedTemplate:
     swap_0_to_1: str
     swap_1_to_0: str
     footer: str
+    swap_0_to_1_source_z: float | None = None
+    swap_1_to_0_source_z: float | None = None
 
 
 class TemplateParseError(ValueError):
     pass
 
 
-def _indices_of_cp_toolchange_start(lines: list[str]) -> list[int]:
-    return [i for i, ln in enumerate(lines) if ln.strip() == START]
+def _cp_toolchange_ranges(
+    lines: list[str],
+) -> list[tuple[int, int, float | None]]:
+    block_ranges: list[tuple[int, int, float | None]] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() != START:
+            i += 1
+            continue
+        j = i + 1
+        while j < len(lines) and lines[j].strip() != END:
+            j += 1
+        if j >= len(lines):
+            raise TemplateParseError("unclosed '; CP TOOLCHANGE START' block (missing END)")
+        block_ranges.append((i, j, None))
+        i = j + 1
+    return block_ranges
+
+
+def _source_layer_z_above(lines: list[str], start_idx: int) -> float | None:
+    for i in range(start_idx - 1, -1, -1):
+        stripped = lines[i].strip()
+        if stripped.startswith(Z_HEIGHT_PREFIX):
+            try:
+                return float(stripped[len(Z_HEIGHT_PREFIX):].strip())
+            except ValueError:
+                return None
+    return None
+
+
+def _x1_toolchange_ranges(
+    lines: list[str],
+) -> list[tuple[int, int, float | None]]:
+    starts = [i for i, ln in enumerate(lines) if ln.strip().startswith(X1_SWAP_START_PREFIX)]
+    block_ranges: list[tuple[int, int, float | None]] = []
+    for start_idx in starts:
+        filament_start_idx = None
+        for i in range(start_idx + 1, len(lines)):
+            if lines[i].strip() == FILAMENT_START:
+                filament_start_idx = i
+                break
+        if filament_start_idx is None:
+            continue
+
+        resume_idx = None
+        for i in range(filament_start_idx + 1, len(lines)):
+            stripped = lines[i].strip()
+            if (
+                stripped.startswith("; OBJECT_ID:")
+                or stripped == "; CHANGE_LAYER"
+                or stripped.startswith("; FEATURE:")
+            ):
+                resume_idx = i
+                break
+
+        end_idx = filament_start_idx if resume_idx is None else resume_idx - 1
+        source_z = _source_layer_z_above(lines, start_idx)
+        block_ranges.append((start_idx, end_idx, source_z))
+    return block_ranges
 
 
 def _auto_header_end_before_first_wipe_tower(
-    lines: list[str], first_cp_idx: int
+    lines: list[str], first_swap_idx: int
 ) -> int | None:
     exec_idx = None
     for i, ln in enumerate(lines):
@@ -37,8 +100,24 @@ def _auto_header_end_before_first_wipe_tower(
             break
     if exec_idx is None:
         return None
-    for i in range(exec_idx + 1, first_cp_idx):
+    for i in range(exec_idx + 1, first_swap_idx):
         if lines[i].strip() == WIPE_TOWER_START:
+            return i
+    return None
+
+
+def _auto_header_end_before_first_layer_change(
+    lines: list[str], first_swap_idx: int
+) -> int | None:
+    exec_idx = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == EXECUTABLE_START:
+            exec_idx = i
+            break
+    if exec_idx is None:
+        return None
+    for i in range(exec_idx + 1, first_swap_idx):
+        if lines[i].strip() == CHANGE_LAYER_START:
             return i
     return None
 
@@ -71,12 +150,14 @@ def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTempl
     raw_lines = text.splitlines()
     lines = [ln.rstrip("\r") for ln in raw_lines]
 
-    start_indices = _indices_of_cp_toolchange_start(lines)
-    if len(start_indices) < 2:
+    block_ranges = _cp_toolchange_ranges(lines)
+    if len(block_ranges) < 2:
+        block_ranges = _x1_toolchange_ranges(lines)
+    if len(block_ranges) < 2:
         raise TemplateParseError(
-            "need at least two '; CP TOOLCHANGE START' blocks (capture A,B,A style export)"
+            "need two toolchange blocks; provide either '; CP TOOLCHANGE START/END' blocks or Bambu ';=X1' swaps"
         )
-    first_cp_idx = start_indices[0]
+    first_swap_idx = block_ranges[0][0]
 
     custom_idx = None
     for i, ln in enumerate(lines):
@@ -87,35 +168,18 @@ def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTempl
     if custom_idx is not None:
         header_lines = lines[:custom_idx]
     elif header_trim == "legacy":
-        header_lines = lines[:first_cp_idx]
+        header_lines = lines[:first_swap_idx]
     else:
-        auto_end = _auto_header_end_before_first_wipe_tower(lines, first_cp_idx)
+        auto_end = _auto_header_end_before_first_wipe_tower(lines, first_swap_idx)
+        if auto_end is None:
+            auto_end = _auto_header_end_before_first_layer_change(lines, first_swap_idx)
         if auto_end is not None:
             header_lines = lines[:auto_end]
         else:
-            header_lines = lines[:first_cp_idx]
+            header_lines = lines[:first_swap_idx]
 
-    block_ranges: list[tuple[int, int]] = []
-    i = 0
-    while i < len(lines):
-        if lines[i].strip() != START:
-            i += 1
-            continue
-        j = i + 1
-        while j < len(lines) and lines[j].strip() != END:
-            j += 1
-        if j >= len(lines):
-            raise TemplateParseError("unclosed '; CP TOOLCHANGE START' block (missing END)")
-        block_ranges.append((i, j))
-        i = j + 1
-
-    if len(block_ranges) < 2:
-        raise TemplateParseError(
-            "need two toolchange blocks; slice a model with two filament changes in Bambu Studio"
-        )
-
-    first_s, first_e = block_ranges[0]
-    second_s, second_e = block_ranges[1]
+    first_s, first_e, first_src_z = block_ranges[0]
+    second_s, second_e, second_src_z = block_ranges[1]
     swap_01_lines = lines[first_s : first_e + 1]
     swap_10_lines = lines[second_s : second_e + 1]
 
@@ -133,4 +197,6 @@ def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTempl
         swap_0_to_1=swap_0_to_1,
         swap_1_to_0=swap_1_to_0,
         footer=footer,
+        swap_0_to_1_source_z=first_src_z,
+        swap_1_to_0_source_z=second_src_z,
     )
