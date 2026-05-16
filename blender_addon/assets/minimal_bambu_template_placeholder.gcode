@@ -26,6 +26,21 @@ M117 FC_PLACEHOLDER_SWAP_0_TO_1
 M117 FC_PLACEHOLDER_SWAP_1_TO_0
 ; CP TOOLCHANGE END
 
+; Standalone purge tower stubs (outside the two CP blocks above). Export with
+; Alternate 0/1 needs '; layer num/total_layer_count:' + '; Z_HEIGHT:' per wipe.
+; CHANGE_LAYER
+; layer num/total_layer_count: 1/2
+; Z_HEIGHT: 0.4
+; WIPE_TOWER_START
+M117 FC_PURGE_TOWER_Z04
+; WIPE_TOWER_END
+; CHANGE_LAYER
+; layer num/total_layer_count: 2/2
+; Z_HEIGHT: 0.6
+; WIPE_TOWER_START
+M117 FC_PURGE_TOWER_Z06
+; WIPE_TOWER_END
+
 ; =============================================================================
 ; FOOTER PLACEHOLDER — real template ends with machine-specific shutdown
 ; =============================================================================

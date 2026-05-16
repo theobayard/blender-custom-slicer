@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import EnumProperty, FloatProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, StringProperty
 from bpy.types import Operator, Panel, Scene
 from bpy_extras.io_utils import ExportHelper
 
@@ -74,6 +74,11 @@ class SLICER_OT_export_gcode(Operator, ExportHelper):
                 s.slicer_layer_height,
                 s.slicer_filament_diameter,
                 s.slicer_feedrate,
+                settings=export.ExportSettings(
+                    center_on_bed_at_export=s.slicer_export_center_on_bed,
+                    bed_width_mm=s.slicer_bed_width_mm,
+                    bed_depth_mm=s.slicer_bed_depth_mm,
+                ),
             )
         except Exception as e:
             self.report({"ERROR"}, str(e))
@@ -116,6 +121,11 @@ class SLICER_PT_panel(Panel):
         layout.prop(s, "slicer_filament_diameter")
         layout.prop(s, "slicer_feedrate")
         layout.prop(s, "slicer_mm_per_scene_meter")
+        layout.prop(s, "slicer_export_center_on_bed")
+        split = layout.split()
+        split.enabled = s.slicer_export_center_on_bed
+        split.prop(s, "slicer_bed_width_mm", text="Bed X (mm)")
+        split.prop(s, "slicer_bed_depth_mm", text="Bed Y (mm)")
         layout.prop(s, "slicer_filament_mode")
         layout.operator("slicer.generate_path")
         layout.operator("slicer.export_gcode")
@@ -152,7 +162,7 @@ def register():
         name="Filament diameter", default=1.75, min=0.5, max=3.0
     )
     Scene.slicer_feedrate = FloatProperty(
-        name="Feedrate", default=3600.0, min=60.0, max=30000.0
+        name="Feedrate", default=1800.0, min=60.0, max=30000.0
     )
     Scene.slicer_mm_per_scene_meter = FloatProperty(
         name="mm per scene meter",
@@ -164,6 +174,28 @@ def register():
         default=10.0,
         min=0.001,
         max=1_000_000.0,
+    )
+    Scene.slicer_export_center_on_bed = BoolProperty(
+        name="Center on bed at export",
+        description=(
+            "Shift exported XY only so the path bbox is centered on the printable area "
+            "(preview stays aligned with the model)"
+        ),
+        default=True,
+    )
+    Scene.slicer_bed_width_mm = FloatProperty(
+        name="Bed width",
+        description="Printable X size in mm for centering (X1/X1C default 256)",
+        default=256.0,
+        min=1.0,
+        max=1000.0,
+    )
+    Scene.slicer_bed_depth_mm = FloatProperty(
+        name="Bed depth",
+        description="Printable Y size in mm for centering (X1/X1C default 256)",
+        default=256.0,
+        min=1.0,
+        max=1000.0,
     )
     Scene.slicer_filament_mode = EnumProperty(
         name="Filament mode",
@@ -189,6 +221,9 @@ def unregister():
         "slicer_filament_diameter",
         "slicer_feedrate",
         "slicer_mm_per_scene_meter",
+        "slicer_export_center_on_bed",
+        "slicer_bed_width_mm",
+        "slicer_bed_depth_mm",
         "slicer_filament_mode",
     ):
         try:

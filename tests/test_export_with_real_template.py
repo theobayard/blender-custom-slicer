@@ -96,6 +96,67 @@ def _expected_motion_line_count(
     )
 
 
+def _purge_tower_extra_lines(
+    parsed,
+    layers: tuple,
+    first_layer_height: float,
+    layer_height: float,
+) -> int:
+    total = 0
+    prev_f = 0
+    for idx, ly in enumerate(layers):
+        slice_th = first_layer_height if idx == 0 else layer_height
+        fi = ly.filament_index
+        changed = fi != prev_f
+        m = export._purge_tower_for_export_layer(
+            parsed,
+            idx,
+            ly.z,
+            slice_th,
+            prev_filament=prev_f,
+            new_filament=fi,
+            filament_changed=changed,
+        )
+        if changed:
+            prev_f = fi
+        if m is not None:
+            total += len(m[0].splitlines())
+            if not changed:
+                total += 2
+    return total
+
+
+def _e_restore_line_pairs(
+    parsed,
+    layers: tuple,
+    first_layer_height: float,
+    layer_height: float,
+) -> int:
+    prev_f = 0
+    pairs = 0
+    for idx, ly in enumerate(layers):
+        slice_th = first_layer_height if idx == 0 else layer_height
+        fi = ly.filament_index
+        filament_changed = fi != prev_f
+        if filament_changed:
+            prev_f = fi
+        has_wipe = (
+            export._purge_tower_for_export_layer(
+                parsed,
+                idx,
+                ly.z,
+                slice_th,
+                prev_filament=prev_f,
+                new_filament=fi,
+                filament_changed=filament_changed,
+            )
+            is not None
+        )
+        if filament_changed or has_wipe:
+            pairs += 2
+    return pairs
+
+
 def _expected_total_lines(
     parsed,
     num_layers: int,
@@ -105,6 +166,9 @@ def _expected_total_lines(
     *,
     emit_bambu_markers: bool = True,
     layer_fan: bool = False,
+    layers: tuple | None = None,
+    first_layer_height: float = 0.2,
+    layer_height: float = 0.2,
 ) -> int:
     h = len(parsed.header.splitlines())
     f = len(parsed.footer.splitlines())
@@ -119,8 +183,17 @@ def _expected_total_lines(
         object_id=parsed.object_id is not None,
     )
     swap_lines = t01 * s01 + t10 * s10
-    e_mode_restore_lines = (t01 + t10) * 2
-    return h + f + composer_prefix + motion + swap_lines + e_mode_restore_lines
+    if layers is not None:
+        e_mode_restore_lines = _e_restore_line_pairs(
+            parsed, layers, first_layer_height, layer_height
+        )
+        purge_lines = _purge_tower_extra_lines(
+            parsed, layers, first_layer_height, layer_height
+        )
+    else:
+        e_mode_restore_lines = (t01 + t10) * 2
+        purge_lines = 0
+    return h + f + composer_prefix + motion + swap_lines + e_mode_restore_lines + purge_lines
 
 
 def test_real_cube_template_parse_structure(cube_parsed):
@@ -181,7 +254,16 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
     )
     lines = out.splitlines()
 
-    assert len(lines) == _expected_total_lines(p, L, S, t01, t10)
+    assert len(lines) == _expected_total_lines(
+        p,
+        L,
+        S,
+        t01,
+        t10,
+        layers=layers,
+        first_layer_height=0.2,
+        layer_height=0.2,
+    )
     assert "; layer num/total_layer_count: 1/5" in out
     assert "; layer num/total_layer_count: 5/5" in out
     assert "; LAYER_CHANGE" not in out
@@ -196,8 +278,8 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
     assert composed.count("; FEATURE: Outer wall") == L
     assert p.object_id is not None
     assert composed.count(f"; OBJECT_ID: {p.object_id}") == L
-    assert out.count(p.swap_0_to_1) == t01
-    assert out.count(p.swap_1_to_0) == t10
+    assert composed.count(export._swap_macro(p, 0, 1, 0.6)) == t01
+    assert composed.count(export._swap_macro(p, 1, 0, 1.0)) == t10
 
     assert out.count("G1 Z0.60000 F1200") == 1
     assert out.count("G1 Z1.00000 F1200") == 1

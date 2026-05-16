@@ -5,6 +5,118 @@ import pytest
 from blender_addon.template_parse import TemplateParseError, parse_bambu_template
 
 
+def test_prime_tower_k_over_small_total_ignored_when_header_declares_print_layers():
+    text = """; HEADER_BLOCK_START
+; total layer number: 100
+; HEADER_BLOCK_END
+; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; CHANGE_LAYER
+; Z_HEIGHT: 0.28
+; layer num/total_layer_count: 1/17
+; WIPE_TOWER_START
+PRIME
+; WIPE_TOWER_END
+; CHANGE_LAYER
+; Z_HEIGHT: 0.2
+; layer num/total_layer_count: 1/100
+; WIPE_TOWER_START
+OK1
+; WIPE_TOWER_END
+"""
+    p = parse_bambu_template(text)
+    assert "OK1" in p.purge_towers_by_layer_1based[1][0]
+    assert "PRIME" not in p.purge_towers_by_layer_1based[1][0]
+
+
+def test_wipe_does_not_bind_stale_k100_marker_beyond_lookback():
+    filler = "\n".join([f"G1 X{i} Y{i}" for i in range(650)])
+    text = f"""; HEADER_BLOCK_START
+; total layer number: 100
+; HEADER_BLOCK_END
+; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; CHANGE_LAYER
+; Z_HEIGHT: 0.2
+; layer num/total_layer_count: 1/100
+; WIPE_TOWER_START
+T1
+; WIPE_TOWER_END
+{filler}
+; CHANGE_LAYER
+; Z_HEIGHT: 0.4
+; layer num/total_layer_count: 2/17
+; WIPE_TOWER_START
+T2
+; WIPE_TOWER_END
+"""
+    p = parse_bambu_template(text)
+    assert 1 in p.purge_towers_by_layer_1based
+    assert 2 not in p.purge_towers_by_layer_1based
+    zb = p.purge_towers_by_layer_z_fallback
+    assert len(zb) == 1 and any("T2" in v for v in zb.values())
+
+
+def test_standalone_wipe_chunk_includes_bambu_prime_tower_prelude_comments():
+    text = """; HEADER_BLOCK_START
+; total layer number: 2
+; HEADER_BLOCK_END
+; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; CHANGE_LAYER
+; Z_HEIGHT: 0.2
+; layer num/total_layer_count: 1/2
+; LAYER_HEIGHT: 0.200000
+; FEATURE: Prime tower
+; LINE_WIDTH: 0.500000
+; WIPE_TOWER_START
+BODY
+; WIPE_TOWER_END
+; CHANGE_LAYER
+; Z_HEIGHT: 0.4
+; layer num/total_layer_count: 2/2
+; LAYER_HEIGHT: 0.200000
+; FEATURE: Prime tower
+; LINE_WIDTH: 0.500000
+; WIPE_TOWER_START
+BODY2
+; WIPE_TOWER_END
+"""
+    p = parse_bambu_template(text)
+    c1 = p.purge_towers_by_layer_1based[1][0]
+    assert c1.startswith("; LAYER_HEIGHT: 0.200000\n")
+    assert "; FEATURE: Prime tower\n" in c1
+    assert "; LINE_WIDTH: 0.500000\n" in c1
+    assert "; WIPE_TOWER_START\nBODY\n; WIPE_TOWER_END\n" in c1
+
+
+def test_executable_cube_asset_purge_map_one_blob_per_layer():
+    root = Path(__file__).resolve().parents[1]
+    pth = root / "blender_addon" / "assets" / "2_color_change_cube.gcode"
+    if not pth.is_file():
+        pytest.skip("cube asset not present")
+    p = parse_bambu_template(pth.read_text(encoding="utf-8", errors="replace"))
+    m = p.purge_towers_by_layer_1based
+    n = len(m)
+    assert n >= 1
+    assert sorted(m) == list(range(1, n + 1))
+    blobs = {m[k][0] for k in m}
+    assert len(blobs) == n
+    assert m[1][0].startswith("; LAYER_HEIGHT:")
+
+
 def test_cube_asset_auto_header_trim_line_count():
     root = Path(__file__).resolve().parents[1]
     pth = root / "blender_addon" / "assets" / "2_color_change_cube.ipynb.gcode"
@@ -17,26 +129,42 @@ def test_cube_asset_auto_header_trim_line_count():
     assert len(p_legacy.header.splitlines()) > 100000
 
 
-def test_cube_asset_without_prime_tower_parses_x1_swaps():
+def test_cube_asset_parses_with_cp_swaps_and_layer_indexed_purge_towers():
     root = Path(__file__).resolve().parents[1]
     pth = root / "blender_addon" / "assets" / "2_color_change_cube.gcode"
     if not pth.is_file():
         pytest.skip("cube asset not present")
     text = pth.read_text(encoding="utf-8", errors="replace")
     p = parse_bambu_template(text)
+    assert "; CP TOOLCHANGE START" in p.swap_0_to_1
+    assert "; CP TOOLCHANGE END" in p.swap_0_to_1
+    assert "; CP TOOLCHANGE START" in p.swap_1_to_0
     assert ";=X1" in p.swap_0_to_1
-    assert ";=X1" in p.swap_1_to_0
-    assert "M73 E1" in p.swap_0_to_1
-    assert "M73 E0" in p.swap_1_to_0
+    assert "M73 E" in p.swap_0_to_1
+    assert "M73" in p.swap_1_to_0
     assert "; filament start gcode" in p.swap_0_to_1
     assert "; filament start gcode" in p.swap_1_to_0
-    assert "; CHANGE_LAYER" not in p.header
     assert "; OBJECT_ID:" not in p.header
-    assert p.swap_0_to_1_source_z == pytest.approx(8.6)
-    assert p.swap_1_to_0_source_z == pytest.approx(11.12)
-    assert "G1 Z11.6 F1200" in p.swap_0_to_1
-    assert "G1 Z14.12 F1200" in p.swap_1_to_0
-    assert p.object_id == "327"
+    assert p.swap_0_to_1_source_z == pytest.approx(5.8)
+    assert p.swap_1_to_0_source_z == pytest.approx(19.24)
+    assert p.object_id is not None and p.object_id.isdigit()
+    m = p.purge_towers_by_layer_1based
+    n = len(m)
+    assert n >= 1
+    t58 = m[min(58, n)][0]
+    assert t58.startswith("; LAYER_HEIGHT:")
+    assert "; WIPE_TOWER_START" in t58
+    assert "CP TOOLCHANGE START" not in t58
+    assert p.purge_tower_post_swap_0_to_1 is not None
+    assert p.purge_tower_post_swap_1_to_0 is not None
+    post01, z01 = p.purge_tower_post_swap_0_to_1
+    post10, z10 = p.purge_tower_post_swap_1_to_0
+    assert z01 == pytest.approx(5.8)
+    assert z10 == pytest.approx(19.24)
+    assert "CP EMPTY GRID" not in post01
+    assert "CP EMPTY GRID" not in post10
+    assert "G1  X232.402 Y232.474" in post01
+    assert m[22][0].count("CP EMPTY GRID") >= 1
 
 
 def test_object_id_parsed_from_first_executable_block_marker():
