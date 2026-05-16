@@ -99,13 +99,21 @@ def _e_per_mm(line_width: float, layer_h: float, filament_diameter: float) -> fl
 
 
 def _append_layer_entry_moves(
-    parts: list[str], layer_idx: int, p0: tuple[float, float, float], layer_z: float, fr: float
+    parts: list[str],
+    layer_idx: int,
+    p0: tuple[float, float, float],
+    layer_z: float,
+    fr: float,
+    object_id: str | None,
 ) -> None:
+    if object_id is not None:
+        parts.append(f"; OBJECT_ID: {object_id}\n")
     if layer_idx == 0:
         parts.append(f"G1 X{p0[0]:.5f} Y{p0[1]:.5f} Z{layer_z:.5f} F{fr:.1f}\n")
-        return
-    parts.append(f"G1 X{p0[0]:.5f} Y{p0[1]:.5f} F30000\n")
-    parts.append(f"G1 Z{layer_z:.5f} F1200\n")
+    else:
+        parts.append(f"G1 X{p0[0]:.5f} Y{p0[1]:.5f} F30000\n")
+        parts.append(f"G1 Z{layer_z:.5f} F1200\n")
+    parts.append("; FEATURE: Outer wall\n")
 
 
 def export_print_ir_to_gcode_string(
@@ -154,7 +162,9 @@ def export_print_ir_to_gcode_string(
             e_accum = 0.0
             prev_f = fi
 
-        _append_layer_entry_moves(parts, layer_idx, layer.perimeter[0].p0, layer.z, fr)
+        _append_layer_entry_moves(
+            parts, layer_idx, layer.perimeter[0].p0, layer.z, fr, parsed.object_id
+        )
 
         for seg in layer.perimeter:
             x1, y1, _ = seg.p1
@@ -207,7 +217,9 @@ def emit_motion_from_ir(
         _append_bambu_layer_progress(
             parts, layer_idx, emit_m991=layer_opts.emit_bambu_markers
         )
-        _append_layer_entry_moves(parts, layer_idx, layer.perimeter[0].p0, layer.z, fr)
+        _append_layer_entry_moves(
+            parts, layer_idx, layer.perimeter[0].p0, layer.z, fr, None
+        )
         for seg in layer.perimeter:
             x1, y1, _ = seg.p1
             length = (

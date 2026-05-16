@@ -23,6 +23,7 @@ class ParsedTemplate:
     footer: str
     swap_0_to_1_source_z: float | None = None
     swap_1_to_0_source_z: float | None = None
+    object_id: str | None = None
 
 
 class TemplateParseError(ValueError):
@@ -192,6 +193,8 @@ def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTempl
     if footer and not footer.endswith("\n"):
         footer += "\n"
 
+    object_id = _first_object_id(lines)
+
     return ParsedTemplate(
         header=header,
         swap_0_to_1=swap_0_to_1,
@@ -199,4 +202,18 @@ def parse_bambu_template(text: str, *, header_trim: str = "auto") -> ParsedTempl
         footer=footer,
         swap_0_to_1_source_z=first_src_z,
         swap_1_to_0_source_z=second_src_z,
+        object_id=object_id,
     )
+
+
+_OBJECT_ID_PREFIX = "; OBJECT_ID:"
+
+
+def _first_object_id(lines: list[str]) -> str | None:
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith(_OBJECT_ID_PREFIX):
+            value = s[len(_OBJECT_ID_PREFIX):].strip()
+            if value:
+                return value
+    return None

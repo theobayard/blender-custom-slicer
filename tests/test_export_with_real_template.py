@@ -77,16 +77,21 @@ def _expected_motion_line_count(
     *,
     emit_bambu_markers: bool = True,
     layer_fan: bool = False,
+    object_id: bool = False,
 ) -> int:
     preamble = 6 if emit_bambu_markers else 1
     fan_lines = (num_layers - 1) if layer_fan else 0
     layer_0_entry = 1
     layer_n_entry = (num_layers - 1) * 2
+    feature_lines = num_layers
+    object_id_lines = num_layers if object_id else 0
     return (
         num_layers * preamble
         + num_layers * segs_per_layer
         + layer_0_entry
         + layer_n_entry
+        + feature_lines
+        + object_id_lines
         + fan_lines
     )
 
@@ -111,6 +116,7 @@ def _expected_total_lines(
         segs_per_layer,
         emit_bambu_markers=emit_bambu_markers,
         layer_fan=layer_fan,
+        object_id=parsed.object_id is not None,
     )
     swap_lines = t01 * s01 + t10 * s10
     e_mode_restore_lines = (t01 + t10) * 2
@@ -146,6 +152,8 @@ def test_emit_motion_instruction_counts_from_ir():
         len(re.findall(r"^M991 S0 P\d+ ;notify layer change$", motion, flags=re.M))
         == L
     )
+    assert motion.count("; FEATURE: Outer wall") == L
+    assert "; OBJECT_ID:" not in motion
     assert len(re.findall(r"^G1 .* E[0-9.]", motion, flags=re.M)) == L * S
     no_e_g1_lines = [
         ln for ln in motion.splitlines() if ln.startswith("G1 ") and " E" not in ln
@@ -185,6 +193,9 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
         len(re.findall(r"^M991 S0 P\d+ ;notify layer change$", composed, flags=re.M))
         == L
     )
+    assert composed.count("; FEATURE: Outer wall") == L
+    assert p.object_id is not None
+    assert composed.count(f"; OBJECT_ID: {p.object_id}") == L
     assert out.count(p.swap_0_to_1) == t01
     assert out.count(p.swap_1_to_0) == t10
 

@@ -198,14 +198,17 @@ def test_post_swap_emits_e_mode_restore_xy_travel_z_drop_then_xy_only_extrude():
     e_zero_line = "G92 E0\n"
     travel_line = "G1 X7.00000 Y11.00000 F30000\n"
     z_drop_line = "G1 Z0.40000 F1200\n"
+    feature_line = "; FEATURE: Outer wall\n"
     e_mode_idx = tail.index(e_mode_line)
     e_zero_idx = tail.index(e_zero_line)
     travel_idx = tail.index(travel_line)
     z_idx = tail.index(z_drop_line)
+    feature_idx = tail.index(feature_line)
     extrude_idx = tail.index("G1 X8.00000 Y12.00000 E")
-    assert e_mode_idx < e_zero_idx < travel_idx < z_idx < extrude_idx
+    assert e_mode_idx < e_zero_idx < travel_idx < z_idx < feature_idx < extrude_idx
     assert "G1 X7.00000 Y11.00000 Z0.40000 F" not in tail
     assert "G1 X8.00000 Y12.00000 Z0.40000 E" not in tail
+    assert "; OBJECT_ID:" not in g
 
 
 def test_change_layer_marker_precedes_swap_macro():

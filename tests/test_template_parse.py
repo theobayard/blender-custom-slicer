@@ -36,6 +36,36 @@ def test_cube_asset_without_prime_tower_parses_x1_swaps():
     assert p.swap_1_to_0_source_z == pytest.approx(11.12)
     assert "G1 Z11.6 F1200" in p.swap_0_to_1
     assert "G1 Z14.12 F1200" in p.swap_1_to_0
+    assert p.object_id == "327"
+
+
+def test_object_id_parsed_from_first_executable_block_marker():
+    text = """; start
+; OBJECT_ID: 42
+; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+G1 X1
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+"""
+    r = parse_bambu_template(text)
+    assert r.object_id == "42"
+
+
+def test_object_id_absent_is_none():
+    text = """; start
+; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+G1 X1
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+"""
+    r = parse_bambu_template(text)
+    assert r.object_id is None
 
 
 def test_placeholder_asset_parses():
