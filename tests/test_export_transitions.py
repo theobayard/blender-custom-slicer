@@ -41,12 +41,15 @@ def test_filament_transition_inserts_swap_and_z():
     )
     assert "; H" in g
     assert g.index("M82 ; absolute E for composed motion") < g.index("; CHANGE_LAYER")
-    assert g.index("; CHANGE_LAYER") < g.index("; LAYER_CHANGE")
+    assert g.index("; CHANGE_LAYER") < g.index("M73 L1")
     assert "G92 E0" in g
     assert "SWAP_0_TO_1" in g
     assert "SWAP_1_TO_0" not in g
     assert "G1 Z0.40000" in g
-    assert "; LAYER_CHANGE" in g
+    assert "M73 L1" in g
+    assert "M991 S0 P0 ;notify layer change" in g
+    assert "M73 L2" in g
+    assert "M991 S0 P1 ;notify layer change" in g
 
 
 def test_export_is_deterministic():
@@ -174,7 +177,7 @@ M400
     assert "G1 Z11.4 F1200" in g
 
 
-def test_post_swap_emits_xy_travel_then_z_drop_then_extrude():
+def test_post_swap_emits_e_mode_restore_xy_travel_z_drop_then_xy_only_extrude():
     parsed = parse_bambu_template(TEMPLATE)
     layers = (
         ir.Layer(z=0.2, perimeter=(_seg(0, 0, 1, 0, 0.2),), filament_index=0),
@@ -191,13 +194,40 @@ def test_post_swap_emits_xy_travel_then_z_drop_then_extrude():
     )
     swap_end = g.index("SWAP_0_TO_1")
     tail = g[swap_end:]
+    e_mode_line = "M82 ; restore absolute E after swap macro\n"
+    e_zero_line = "G92 E0\n"
     travel_line = "G1 X7.00000 Y11.00000 F30000\n"
     z_drop_line = "G1 Z0.40000 F1200\n"
+    e_mode_idx = tail.index(e_mode_line)
+    e_zero_idx = tail.index(e_zero_line)
     travel_idx = tail.index(travel_line)
     z_idx = tail.index(z_drop_line)
-    extrude_idx = tail.index("G1 X8.00000 Y12.00000 Z0.40000 E")
-    assert travel_idx < z_idx < extrude_idx
+    extrude_idx = tail.index("G1 X8.00000 Y12.00000 E")
+    assert e_mode_idx < e_zero_idx < travel_idx < z_idx < extrude_idx
     assert "G1 X7.00000 Y11.00000 Z0.40000 F" not in tail
+    assert "G1 X8.00000 Y12.00000 Z0.40000 E" not in tail
+
+
+def test_change_layer_marker_precedes_swap_macro():
+    parsed = parse_bambu_template(TEMPLATE)
+    layers = (
+        ir.Layer(z=0.2, perimeter=(_seg(0, 0, 1, 0, 0.2),), filament_index=0),
+        ir.Layer(z=0.4, perimeter=(_seg(7, 11, 8, 12, 0.4),), filament_index=1),
+    )
+    g = export.export_print_ir_to_gcode_string(
+        ir.PrintIR(layers=layers),
+        parsed,
+        line_width=0.45,
+        first_layer_height=0.2,
+        layer_height=0.2,
+        filament_diameter=1.75,
+        default_feedrate=3000.0,
+    )
+    second_layer_marker = g.index("; Z_HEIGHT: 0.40000")
+    swap_marker = g.index("SWAP_0_TO_1")
+    m991_layer2 = g.index("M991 S0 P1 ;notify layer change")
+    assert second_layer_marker < swap_marker
+    assert m991_layer2 < swap_marker
 
 
 def test_layer_fan_m106_s_when_use_p1_off_minimal_template():

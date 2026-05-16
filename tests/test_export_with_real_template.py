@@ -78,9 +78,17 @@ def _expected_motion_line_count(
     emit_bambu_markers: bool = True,
     layer_fan: bool = False,
 ) -> int:
-    preamble = 6 if emit_bambu_markers else 2
+    preamble = 6 if emit_bambu_markers else 1
     fan_lines = (num_layers - 1) if layer_fan else 0
-    return num_layers * preamble + num_layers * segs_per_layer + 1 + fan_lines
+    layer_0_entry = 1
+    layer_n_entry = (num_layers - 1) * 2
+    return (
+        num_layers * preamble
+        + num_layers * segs_per_layer
+        + layer_0_entry
+        + layer_n_entry
+        + fan_lines
+    )
 
 
 def _expected_total_lines(
@@ -105,8 +113,8 @@ def _expected_total_lines(
         layer_fan=layer_fan,
     )
     swap_lines = t01 * s01 + t10 * s10
-    post_swap_lines = (t01 + t10) * 2
-    return h + f + composer_prefix + motion + swap_lines + post_swap_lines
+    e_mode_restore_lines = (t01 + t10) * 2
+    return h + f + composer_prefix + motion + swap_lines + e_mode_restore_lines
 
 
 def test_real_cube_template_parse_structure(cube_parsed):
@@ -131,11 +139,18 @@ def test_emit_motion_instruction_counts_from_ir():
         default_feedrate=3000.0,
     )
     assert motion.count("; CHANGE_LAYER") == L
-    assert motion.count("; LAYER_CHANGE") == L
+    assert "; LAYER_CHANGE" not in motion
     assert "; layer num/total_layer_count: 1/5" in motion
-    assert len(re.findall(r"^M73 P\d+ R0$", motion, flags=re.M)) == L
+    assert len(re.findall(r"^M73 L\d+$", motion, flags=re.M)) == L
+    assert (
+        len(re.findall(r"^M991 S0 P\d+ ;notify layer change$", motion, flags=re.M))
+        == L
+    )
     assert len(re.findall(r"^G1 .* E[0-9.]", motion, flags=re.M)) == L * S
-    assert sum(1 for ln in motion.splitlines() if ln.startswith("G1 ") and " E" not in ln) == 1
+    no_e_g1_lines = [
+        ln for ln in motion.splitlines() if ln.startswith("G1 ") and " E" not in ln
+    ]
+    assert len(no_e_g1_lines) == 1 + 2 * (L - 1)
 
 
 def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
@@ -161,7 +176,15 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
     assert len(lines) == _expected_total_lines(p, L, S, t01, t10)
     assert "; layer num/total_layer_count: 1/5" in out
     assert "; layer num/total_layer_count: 5/5" in out
-    assert out.count("; LAYER_CHANGE") == L
+    assert "; LAYER_CHANGE" not in out
+    composed_start = out.index("M82 ; absolute E for composed motion\n")
+    composed_end = out.index(p.footer)
+    composed = out[composed_start:composed_end]
+    assert len(re.findall(r"^M73 L\d+$", composed, flags=re.M)) == L
+    assert (
+        len(re.findall(r"^M991 S0 P\d+ ;notify layer change$", composed, flags=re.M))
+        == L
+    )
     assert out.count(p.swap_0_to_1) == t01
     assert out.count(p.swap_1_to_0) == t10
 
@@ -171,4 +194,4 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
 
     m73_footer = len(re.findall(r"^M73 P\d+ R0$", p.footer, flags=re.M))
     assert m73_footer == 1
-    assert len(re.findall(r"^M73 P\d+ R0$", out, flags=re.M)) == L + m73_footer
+    assert len(re.findall(r"^M73 P\d+ R0$", out, flags=re.M)) == m73_footer
