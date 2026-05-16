@@ -7,3 +7,6 @@ __pycache__/
 .DS_Store
 .venv/
 venv/
+
+# Blender “Export G-code” and other local experiment outputs (not templates).
+local_gcode/
