@@ -118,8 +118,11 @@ def export_print_ir_to_gcode_string(
         fi = layer.filament_index
         if fi != prev_f:
             parts.append(_swap_macro(parsed, prev_f, fi, layer.z))
-            parts.append(f"G1 Z{layer.z:.5f} F{max(600.0, 1200.0):.0f}\n")
+            p0 = layer.perimeter[0].p0
+            parts.append(f"G1 X{p0[0]:.5f} Y{p0[1]:.5f} F30000\n")
+            parts.append(f"G1 Z{layer.z:.5f} F1200\n")
             prev_f = fi
+            first_move = False
 
         lh = first_layer_height if layer_idx == 0 else layer_height
         e_scale = _e_per_mm(line_width, lh, filament_diameter)

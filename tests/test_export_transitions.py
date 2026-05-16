@@ -174,6 +174,32 @@ M400
     assert "G1 Z11.4 F1200" in g
 
 
+def test_post_swap_emits_xy_travel_then_z_drop_then_extrude():
+    parsed = parse_bambu_template(TEMPLATE)
+    layers = (
+        ir.Layer(z=0.2, perimeter=(_seg(0, 0, 1, 0, 0.2),), filament_index=0),
+        ir.Layer(z=0.4, perimeter=(_seg(7, 11, 8, 12, 0.4),), filament_index=1),
+    )
+    g = export.export_print_ir_to_gcode_string(
+        ir.PrintIR(layers=layers),
+        parsed,
+        line_width=0.45,
+        first_layer_height=0.2,
+        layer_height=0.2,
+        filament_diameter=1.75,
+        default_feedrate=3000.0,
+    )
+    swap_end = g.index("SWAP_0_TO_1")
+    tail = g[swap_end:]
+    travel_line = "G1 X7.00000 Y11.00000 F30000\n"
+    z_drop_line = "G1 Z0.40000 F1200\n"
+    travel_idx = tail.index(travel_line)
+    z_idx = tail.index(z_drop_line)
+    extrude_idx = tail.index("G1 X8.00000 Y12.00000 Z0.40000 E")
+    assert travel_idx < z_idx < extrude_idx
+    assert "G1 X7.00000 Y11.00000 Z0.40000 F" not in tail
+
+
 def test_layer_fan_m106_s_when_use_p1_off_minimal_template():
     parsed = parse_bambu_template(TEMPLATE)
     layers = (

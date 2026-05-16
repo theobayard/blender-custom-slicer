@@ -105,8 +105,8 @@ def _expected_total_lines(
         layer_fan=layer_fan,
     )
     swap_lines = t01 * s01 + t10 * s10
-    z_lines = (t01 + t10) * 1
-    return h + f + composer_prefix + motion + swap_lines + z_lines
+    post_swap_lines = (t01 + t10) * 2
+    return h + f + composer_prefix + motion + swap_lines + post_swap_lines
 
 
 def test_real_cube_template_parse_structure(cube_parsed):
