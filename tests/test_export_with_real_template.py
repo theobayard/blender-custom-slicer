@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from blender_addon import export, ir
+from blender_addon.export import ExportLayerOptions
 from blender_addon.template_parse import parse_bambu_template
 
 ASSET = (
@@ -70,19 +71,39 @@ def _count_transitions_01_10(layers: tuple[ir.Layer, ...]) -> tuple[int, int]:
     return t01, t10
 
 
-def _expected_motion_line_count(num_layers: int, segs_per_layer: int) -> int:
-    return num_layers * 2 + (num_layers * segs_per_layer + 1)
+def _expected_motion_line_count(
+    num_layers: int,
+    segs_per_layer: int,
+    *,
+    emit_bambu_markers: bool = True,
+    layer_fan: bool = False,
+) -> int:
+    preamble = 6 if emit_bambu_markers else 2
+    fan_lines = (num_layers - 1) if layer_fan else 0
+    return num_layers * preamble + num_layers * segs_per_layer + 1 + fan_lines
 
 
 def _expected_total_lines(
-    parsed, num_layers: int, segs_per_layer: int, t01: int, t10: int
+    parsed,
+    num_layers: int,
+    segs_per_layer: int,
+    t01: int,
+    t10: int,
+    *,
+    emit_bambu_markers: bool = True,
+    layer_fan: bool = False,
 ) -> int:
     h = len(parsed.header.splitlines())
     f = len(parsed.footer.splitlines())
     composer_prefix = 2
     s01 = len(parsed.swap_0_to_1.splitlines())
     s10 = len(parsed.swap_1_to_0.splitlines())
-    motion = _expected_motion_line_count(num_layers, segs_per_layer)
+    motion = _expected_motion_line_count(
+        num_layers,
+        segs_per_layer,
+        emit_bambu_markers=emit_bambu_markers,
+        layer_fan=layer_fan,
+    )
     swap_lines = t01 * s01 + t10 * s10
     z_lines = (t01 + t10) * 1
     return h + f + composer_prefix + motion + swap_lines + z_lines
@@ -109,7 +130,9 @@ def test_emit_motion_instruction_counts_from_ir():
         filament_diameter=1.75,
         default_feedrate=3000.0,
     )
+    assert motion.count("; CHANGE_LAYER") == L
     assert motion.count("; LAYER_CHANGE") == L
+    assert "; layer num/total_layer_count: 1/5" in motion
     assert len(re.findall(r"^M73 P\d+ R0$", motion, flags=re.M)) == L
     assert len(re.findall(r"^G1 .* E[0-9.]", motion, flags=re.M)) == L * S
     assert sum(1 for ln in motion.splitlines() if ln.startswith("G1 ") and " E" not in ln) == 1
@@ -136,12 +159,15 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
     lines = out.splitlines()
 
     assert len(lines) == _expected_total_lines(p, L, S, t01, t10)
+    assert "; layer num/total_layer_count: 1/5" in out
+    assert "; layer num/total_layer_count: 5/5" in out
     assert out.count("; LAYER_CHANGE") == L
     assert out.count(p.swap_0_to_1) == t01
     assert out.count(p.swap_1_to_0) == t10
 
     assert out.count("G1 Z0.60000 F1200") == 1
     assert out.count("G1 Z1.00000 F1200") == 1
+    assert "; Z_HEIGHT: 0.20000" in out
 
     m73_footer = len(re.findall(r"^M73 P\d+ R0$", p.footer, flags=re.M))
     assert m73_footer == 1
