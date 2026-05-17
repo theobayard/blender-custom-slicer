@@ -80,6 +80,12 @@ One `.gcode` file from **Bambu Studio** for **X1C + AMS** that contains:
 
 **Dev-only placeholder (do not print):** [blender_addon/assets/minimal_bambu_template_placeholder.gcode](blender_addon/assets/minimal_bambu_template_placeholder.gcode) — parses and composes for UI/export testing in Blender; it is **not** a real Bambu preamble or AMS macro set. Standalone wipes must include **`; layer num/total_layer_count:`** alongside **`; Z_HEIGHT:`** (indexed mode); stubs at layers **1** and **2** at **0.4 / 0.6 mm** so **Alternate 0/1** smoke tests avoid `MissingPurgeTowerError`.
 
+## Brim (first layer)
+
+- Panel **Brim** checkbox → **Width (mm)** (default **5**) and **Object gap (mm)** (default **0.1**, Bambu-style). Applied on **Generate path** only (stored in layer 0 `brim_loops` on PrintIR).
+- Concentric offset loops from the layer-0 footprint (toolpath centerline). **Object gap** is clearance from the **printed outer surface** (contour + half line width), so the inner brim centerline is offset by `gap + line_width` from the contour; loop count from width ÷ line width. Export: `; FEATURE: Brim` loops (inner→outer) before `; FEATURE: Outer wall`. Bed centering bbox includes brim XY.
+- Concave / messy footprints may produce bad offset geometry (same class of risk as non-convex slice contours).
+
 ## Limits / non-goals (MVP)
 
 - No cloud `.gcode.3mf` packaging.

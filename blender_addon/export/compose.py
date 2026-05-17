@@ -9,6 +9,7 @@ from .gcode_edit import (
     rebase_swap_z,
 )
 from .motion import (
+    append_brim_loops,
     append_layer_entry_moves,
     append_perimeter,
     e_per_mm,
@@ -126,6 +127,11 @@ def _emit_layers(
 
             if filament_changed or wipe is not None:
                 e_accum = _reset_absolute_e(parts)
+
+        if layer_idx == 0 and layer.brim_loops:
+            e_accum = append_brim_loops(
+                parts, layer.brim_loops, e_scale, fr, xy_offset, e_accum
+            )
 
         append_layer_entry_moves(
             parts,

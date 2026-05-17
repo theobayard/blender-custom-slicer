@@ -27,6 +27,7 @@ class Layer:
     z: float
     perimeter: tuple[Segment, ...]
     filament_index: int
+    brim_loops: tuple[tuple[Segment, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,21 @@ def validate_print_ir(ir: PrintIR) -> None:
     for i, layer in enumerate(ir.layers):
         if not layer.perimeter:
             raise IRValidationError(f"layer {i} has empty perimeter")
+        if layer.brim_loops:
+            if i != 0:
+                raise IRValidationError(f"layer {i} has brim_loops but only layer 0 may")
+            for j, loop in enumerate(layer.brim_loops):
+                if not loop:
+                    raise IRValidationError(f"layer 0 brim loop {j} is empty")
+                for seg in loop:
+                    if seg.feedrate <= 0:
+                        raise IRValidationError(
+                            f"layer 0 brim loop {j} has non-positive feedrate"
+                        )
+                    if seg.e_delta < 0:
+                        raise IRValidationError(
+                            f"layer 0 brim loop {j} has negative e_delta"
+                        )
         for seg in layer.perimeter:
             if seg.feedrate <= 0:
                 raise IRValidationError(f"layer {i} has non-positive feedrate")

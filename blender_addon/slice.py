@@ -6,7 +6,7 @@ from typing import Callable, Optional
 import bpy
 from mathutils import Vector
 
-from . import ir
+from . import brim, ir
 
 _last_ir: Optional[ir.PrintIR] = None
 
@@ -242,6 +242,10 @@ def mesh_to_print_ir(
     feedrate: float,
     filament_mode: str = "SAME_0",
     z_tol: float = 1e-5,
+    use_brim: bool = False,
+    brim_width_mm: float = 5.0,
+    brim_object_gap_mm: float = 0.1,
+    line_width_mm: float = 0.45,
 ) -> ir.PrintIR:
     if obj.type != "MESH":
         raise TypeError("active object must be a mesh")
@@ -273,11 +277,19 @@ def mesh_to_print_ir(
                     feedrate=feedrate,
                 )
             )
+        brim_loops: tuple[tuple[ir.Segment, ...], ...] = ()
+        if idx == 0 and use_brim:
+            brim_2d = brim.build_brim_loops(
+                loop2d, brim_width_mm, brim_object_gap_mm, line_width_mm
+            )
+            brim_loops = brim.brim_loops_to_segments(brim_2d, lz, feedrate)
+
         out_layers.append(
             ir.Layer(
                 z=lz,
                 perimeter=tuple(segs),
                 filament_index=ff(idx),
+                brim_loops=brim_loops,
             )
         )
 

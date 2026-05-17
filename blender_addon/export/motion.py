@@ -3,16 +3,31 @@ from __future__ import annotations
 from .. import ir
 
 
+def _accum_xy_bounds(
+    minx: float,
+    maxx: float,
+    miny: float,
+    maxy: float,
+    segments: tuple[ir.Segment, ...],
+) -> tuple[float, float, float, float]:
+    for seg in segments:
+        for x, y in ((seg.p0[0], seg.p0[1]), (seg.p1[0], seg.p1[1])):
+            minx = min(minx, x)
+            maxx = max(maxx, x)
+            miny = min(miny, y)
+            maxy = max(maxy, y)
+    return minx, maxx, miny, maxy
+
+
 def ir_xy_min_max(print_ir: ir.PrintIR) -> tuple[float, float, float, float]:
     minx = miny = float("inf")
     maxx = maxy = float("-inf")
     for layer in print_ir.layers:
-        for seg in layer.perimeter:
-            for x, y in ((seg.p0[0], seg.p0[1]), (seg.p1[0], seg.p1[1])):
-                minx = min(minx, x)
-                maxx = max(maxx, x)
-                miny = min(miny, y)
-                maxy = max(maxy, y)
+        minx, maxx, miny, maxy = _accum_xy_bounds(
+            minx, maxx, miny, maxy, layer.perimeter
+        )
+        for loop in layer.brim_loops:
+            minx, maxx, miny, maxy = _accum_xy_bounds(minx, maxx, miny, maxy, loop)
     return minx, maxx, miny, maxy
 
 
@@ -51,6 +66,37 @@ def append_layer_entry_moves(
         parts.append(f"G1 X{x0:.5f} Y{y0:.5f} F30000\n")
         parts.append(f"G1 Z{layer_z:.5f} F1200\n")
     parts.append("; FEATURE: Outer wall\n")
+
+
+def append_brim_loops(
+    parts: list[str],
+    brim_loops: tuple[tuple[ir.Segment, ...], ...],
+    e_scale: float,
+    fr: float,
+    xy_offset: tuple[float, float],
+    e_accum: float,
+) -> float:
+    for loop in brim_loops:
+        if not loop:
+            continue
+        x0 = loop[0].p0[0] + xy_offset[0]
+        y0 = loop[0].p0[1] + xy_offset[1]
+        z0 = loop[0].p0[2]
+        parts.append(f"G1 X{x0:.5f} Y{y0:.5f} Z{z0:.5f} F30000\n")
+        parts.append("; FEATURE: Brim\n")
+        for seg in loop:
+            x1, y1, _ = seg.p1
+            x1 += xy_offset[0]
+            y1 += xy_offset[1]
+            length = (
+                (seg.p1[0] - seg.p0[0]) ** 2
+                + (seg.p1[1] - seg.p0[1]) ** 2
+                + (seg.p1[2] - seg.p0[2]) ** 2
+            ) ** 0.5
+            e_seg = seg.e_delta if seg.e_delta > 0 else e_scale * length
+            e_accum += e_seg
+            parts.append(f"G1 X{x1:.5f} Y{y1:.5f} E{e_accum:.5f} F{fr:.1f}\n")
+    return e_accum
 
 
 def append_perimeter(

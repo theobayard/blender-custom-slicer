@@ -28,13 +28,13 @@ def build_preview(
         col = context.scene.collection
     col.objects.link(obj)
 
-    for layer in print_ir.layers:
+    def _add_loop_spline(segments: tuple) -> None:
         spline = curve.splines.new("POLY")
-        n = len(layer.perimeter)
+        n = len(segments)
         if n == 0:
             curve.splines.remove(spline)
-            continue
-        pts = [Vector(layer.perimeter[i].p0) for i in range(n)]
+            return
+        pts = [Vector(segments[i].p0) for i in range(n)]
         spline.points.add(n - 1)
         for i, co in enumerate(pts):
             spline.points[i].co = (
@@ -44,5 +44,10 @@ def build_preview(
                 1.0,
             )
         spline.use_cyclic_u = True
+
+    for layer in print_ir.layers:
+        for brim_loop in layer.brim_loops:
+            _add_loop_spline(brim_loop)
+        _add_loop_spline(layer.perimeter)
 
     return obj

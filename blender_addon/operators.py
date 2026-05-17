@@ -29,6 +29,10 @@ class SLICER_OT_generate_path(Operator):
                 s.slicer_first_layer_height,
                 s.slicer_feedrate,
                 filament_mode=s.slicer_filament_mode,
+                use_brim=s.slicer_use_brim,
+                brim_width_mm=s.slicer_brim_width_mm,
+                brim_object_gap_mm=s.slicer_brim_object_gap_mm,
+                line_width_mm=s.slicer_line_width,
             )
             preview.build_preview(context, print_ir, 1.0 / bu_to_mm)
         except Exception as e:
@@ -127,6 +131,11 @@ class SLICER_PT_panel(Panel):
         split.prop(s, "slicer_bed_width_mm", text="Bed X (mm)")
         split.prop(s, "slicer_bed_depth_mm", text="Bed Y (mm)")
         layout.prop(s, "slicer_filament_mode")
+        layout.prop(s, "slicer_use_brim", text="Brim")
+        if s.slicer_use_brim:
+            box = layout.box()
+            box.prop(s, "slicer_brim_width_mm", text="Width (mm)")
+            box.prop(s, "slicer_brim_object_gap_mm", text="Object gap (mm)")
         layout.operator("slicer.generate_path")
         layout.operator("slicer.export_gcode")
         layout.operator("slicer.clear_preview")
@@ -205,6 +214,25 @@ def register():
         ),
         default="SAME_0",
     )
+    Scene.slicer_use_brim = BoolProperty(
+        name="Brim",
+        description="First-layer brim loops around the footprint for bed adhesion",
+        default=False,
+    )
+    Scene.slicer_brim_width_mm = FloatProperty(
+        name="Brim width",
+        description="Total radial width of brim from the inner brim edge (mm)",
+        default=5.0,
+        min=0.05,
+        max=50.0,
+    )
+    Scene.slicer_brim_object_gap_mm = FloatProperty(
+        name="Brim object gap",
+        description="Gap between model outline and inner brim edge (mm)",
+        default=0.1,
+        min=0.0,
+        max=2.0,
+    )
 
 
 def unregister():
@@ -225,6 +253,9 @@ def unregister():
         "slicer_bed_width_mm",
         "slicer_bed_depth_mm",
         "slicer_filament_mode",
+        "slicer_use_brim",
+        "slicer_brim_width_mm",
+        "slicer_brim_object_gap_mm",
     ):
         try:
             delattr(Scene, attr)
