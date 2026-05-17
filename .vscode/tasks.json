@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Blender: hard reload add-on (MCP socket)",
+      "type": "shell",
+      "command": "python3",
+      "args": ["${workspaceFolder}/scripts/blender_addon_hard_reload_socket.py"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    }
+  ]
+}
