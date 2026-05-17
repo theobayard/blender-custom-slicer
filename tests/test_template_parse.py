@@ -245,6 +245,65 @@ tail
     assert "A" in p.swap_0_to_1
 
 
+def test_unclosed_wipe_tower_raises():
+    text = """; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; Z_HEIGHT: 0.2
+; WIPE_TOWER_START
+NO END
+"""
+    with pytest.raises(TemplateParseError, match="unclosed '; WIPE_TOWER_START'"):
+        parse_bambu_template(text)
+
+
+def test_contradicting_layer_totals_in_purge_raises():
+    text = """; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; Z_HEIGHT: 0.2
+; layer num/total_layer_count: 1/10
+; WIPE_TOWER_START
+T1
+; WIPE_TOWER_END
+; Z_HEIGHT: 0.4
+; layer num/total_layer_count: 2/99
+; WIPE_TOWER_START
+T2
+; WIPE_TOWER_END
+"""
+    with pytest.raises(TemplateParseError, match="contradicting template layer totals"):
+        parse_bambu_template(text)
+
+
+def test_non_contiguous_purge_layer_indices_raises():
+    text = """; CP TOOLCHANGE START
+A
+; CP TOOLCHANGE END
+; CP TOOLCHANGE START
+B
+; CP TOOLCHANGE END
+; Z_HEIGHT: 0.2
+; layer num/total_layer_count: 1/3
+; WIPE_TOWER_START
+T1
+; WIPE_TOWER_END
+; Z_HEIGHT: 0.6
+; layer num/total_layer_count: 3/3
+; WIPE_TOWER_START
+T3
+; WIPE_TOWER_END
+"""
+    with pytest.raises(TemplateParseError, match="contiguous layers"):
+        parse_bambu_template(text)
+
+
 def test_parse_requires_two_blocks():
     text = """; CP TOOLCHANGE START
 X

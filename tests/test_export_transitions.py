@@ -391,7 +391,7 @@ def test_layer_fan_m106_s_when_use_p1_off_minimal_template():
 
 
 def test_export_uses_layer_map_even_when_template_executable_total_understates():
-    p = ParsedTemplate(
+    p = ParsedTemplate.from_test_slices(
         header="\n",
         swap_0_to_1="; CP TOOLCHANGE START\nS\n; CP TOOLCHANGE END\n",
         swap_1_to_0="; CP TOOLCHANGE START\nT\n; CP TOOLCHANGE END\n",
@@ -417,6 +417,51 @@ def test_export_uses_layer_map_even_when_template_executable_total_understates()
         default_feedrate=3000.0,
     )
     assert "L1" in g and "L2" in g
+
+
+def test_unsupported_filament_transition_raises():
+    parsed = parse_bambu_template(TEMPLATE)
+    layers = (
+        ir.Layer(z=0.2, perimeter=(_seg(0, 0, 1, 0, 0.2),), filament_index=0),
+        ir.Layer(z=0.4, perimeter=(_seg(1, 0, 1, 1, 0.4),), filament_index=2),
+    )
+    with pytest.raises(ValueError, match="unsupported filament transition"):
+        export.export_print_ir_to_gcode_string(
+            ir.PrintIR(layers=layers),
+            parsed,
+            0.45,
+            0.2,
+            0.2,
+            1.75,
+            3000.0,
+        )
+
+
+def test_motion_only_perimeter_matches_template_export_without_purge_map():
+    parsed = ParsedTemplate.from_test_slices(
+        header=";\n",
+        swap_0_to_1="; CP TOOLCHANGE START\nS\n; CP TOOLCHANGE END\n",
+        swap_1_to_0="; CP TOOLCHANGE START\nT\n; CP TOOLCHANGE END\n",
+        footer=";\n",
+    )
+    layers = (
+        ir.Layer(z=0.2, perimeter=(_seg(0, 0, 1, 0, 0.2),), filament_index=0),
+        ir.Layer(z=0.4, perimeter=(_seg(1, 0, 1, 1, 0.4),), filament_index=0),
+    )
+    print_ir = ir.PrintIR(layers=layers)
+    motion = export.emit_motion_from_ir(
+        print_ir, 0.45, 0.2, 0.2, 1.75, 3000.0
+    )
+    full = export.export_print_ir_to_gcode_string(
+        print_ir, parsed, 0.45, 0.2, 0.2, 1.75, 3000.0
+    )
+    motion_g1 = [
+        ln for ln in motion.splitlines() if ln.startswith("G1 X") and " E" in ln
+    ]
+    full_g1 = [
+        ln for ln in full.splitlines() if ln.startswith("G1 X") and " E" in ln
+    ]
+    assert motion_g1 == full_g1
 
 
 def test_missing_purge_tower_raises_with_clear_message():

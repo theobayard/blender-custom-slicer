@@ -107,20 +107,21 @@ def _purge_tower_extra_lines(
     for idx, ly in enumerate(layers):
         slice_th = first_layer_height if idx == 0 else layer_height
         fi = ly.filament_index
-        changed = fi != prev_f
-        m = export._purge_tower_for_export_layer(
+        prev_fil_before = prev_f
+        changed = fi != prev_fil_before
+        if changed:
+            prev_f = fi
+        chunk = export.resolve_purge_for_layer(
             parsed,
             idx,
             ly.z,
             slice_th,
-            prev_filament=prev_f,
+            prev_filament=prev_fil_before,
             new_filament=fi,
             filament_changed=changed,
         )
-        if changed:
-            prev_f = fi
-        if m is not None:
-            total += len(m[0].splitlines())
+        if chunk is not None:
+            total += len(chunk.text.splitlines())
             if not changed:
                 total += 2
     return total
@@ -137,16 +138,17 @@ def _e_restore_line_pairs(
     for idx, ly in enumerate(layers):
         slice_th = first_layer_height if idx == 0 else layer_height
         fi = ly.filament_index
-        filament_changed = fi != prev_f
+        prev_fil_before = prev_f
+        filament_changed = fi != prev_fil_before
         if filament_changed:
             prev_f = fi
         has_wipe = (
-            export._purge_tower_for_export_layer(
+            export.resolve_purge_for_layer(
                 parsed,
                 idx,
                 ly.z,
                 slice_th,
-                prev_filament=prev_f,
+                prev_filament=prev_fil_before,
                 new_filament=fi,
                 filament_changed=filament_changed,
             )
@@ -278,8 +280,8 @@ def test_export_with_real_template_line_budget_and_swaps(cube_parsed):
     assert composed.count("; FEATURE: Outer wall") == L
     assert p.object_id is not None
     assert composed.count(f"; OBJECT_ID: {p.object_id}") == L
-    assert composed.count(export._swap_macro(p, 0, 1, 0.6)) == t01
-    assert composed.count(export._swap_macro(p, 1, 0, 1.0)) == t10
+    assert composed.count(export.swap_macro_text(p, 0, 1, 0.6)) == t01
+    assert composed.count(export.swap_macro_text(p, 1, 0, 1.0)) == t10
 
     assert out.count("G1 Z0.60000 F1200") == 1
     assert out.count("G1 Z1.00000 F1200") == 1

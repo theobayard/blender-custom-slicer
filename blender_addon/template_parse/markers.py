@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import re
+
+START = "; CP TOOLCHANGE START"
+END = "; CP TOOLCHANGE END"
+CUSTOM_START = "; ---CUSTOM_MOTION_START---"
+EXECUTABLE_START = "; EXECUTABLE_BLOCK_START"
+WIPE_TOWER_START = "; WIPE_TOWER_START"
+WIPE_TOWER_END = "; WIPE_TOWER_END"
+CHANGE_LAYER_START = "; CHANGE_LAYER"
+MACHINE_END_START = "; MACHINE_END_GCODE_START"
+EXECUTABLE_END = "; EXECUTABLE_BLOCK_END"
+X1_SWAP_START_PREFIX = ";=X1"
+FILAMENT_START = "; filament start gcode"
+Z_HEIGHT_PREFIX = "; Z_HEIGHT:"
+OBJECT_ID_PREFIX = "; OBJECT_ID:"
+
+_LAYER_NUM_TOTAL_RE = re.compile(
+    r"^\s*;\s*layer\s+num/total_layer_count:\s*(\d+)\s*/\s*(\d+)\s*$",
+    re.IGNORECASE,
+)
+_HEADER_TOTAL_LAYER_RE = re.compile(
+    r"^\s*;\s*total\s+layer\s+number:\s*(\d+)\s*$",
+    re.IGNORECASE,
+)
+
+POST_TOOLCHANGE_SCAN_LINES = 500
+POST_TOOLCHANGE_MAX_CHUNK_LINES = 120
+LAYER_MARKER_MAX_LOOKBACK = 600
+
+OBJECT_FEATURE_MARKERS = (
+    "; OBJECT_ID:",
+    "; FEATURE: Inner wall",
+    "; FEATURE: Outer wall",
+    "; FEATURE: Sparse infill",
+)
+
+WIPE_TOWER_PRELUDE_PREFIXES = (
+    "; LAYER_HEIGHT:",
+    "; LINE_WIDTH:",
+)
