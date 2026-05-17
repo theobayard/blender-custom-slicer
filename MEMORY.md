@@ -4,6 +4,8 @@
 
 Blender add-on: vase-oriented mesh → per-layer single perimeter → plain `.gcode` for Bambu X1C + AMS (SD card), using one Bambu Studio–exported template for header/footer and toolchange macros.
 
+**User-facing overview (Mermaid diagrams, install, module map):** [README.md](README.md).
+
 ## Assumptions
 
 - Mesh is vase-compatible (single outer wall per layer; no infill/shells in this tool).
